@@ -8,6 +8,7 @@ import {
   stopTab,
 } from '@/lib/tabs';
 import { readSettings, saveSpeed } from '@/lib/settings';
+import PinControl from './PinControl';
 import {
   DEFAULT_SPEED_PX_PER_S,
   formatSpeed,
@@ -28,7 +29,7 @@ type Page =
   | { kind: 'loading' }
   /** A page nothing can be injected into: a browser page, or the Web Store. */
   | { kind: 'closed' }
-  | { kind: 'open'; tabId: number; running: boolean; scrollable: boolean };
+  | { kind: 'open'; tabId: number; url: string; running: boolean; scrollable: boolean };
 
 export default function App() {
   const [page, setPage] = useState<Page>({ kind: 'loading' });
@@ -52,6 +53,7 @@ export default function App() {
       setPage({
         kind: 'open',
         tabId: tab.id,
+        url: tab.url ?? '',
         running: status?.running ?? false,
         scrollable: status?.scrollable ?? true,
       });
@@ -134,6 +136,12 @@ export default function App() {
           </p>
         </div>
       </div>
+
+      {page.kind === 'open' && (
+        <div className="mt-4 border-t border-neutral-200 pt-3 dark:border-neutral-800">
+          <PinControl url={page.url} tabId={page.tabId} />
+        </div>
+      )}
 
       {page.kind === 'closed' && (
         <p className="mt-3 text-xs text-neutral-500 dark:text-neutral-400">
