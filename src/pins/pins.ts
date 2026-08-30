@@ -177,3 +177,56 @@ export function watchRevokedPermissions(): void {
     void reconcilePins();
   });
 }
+
+/** The scheme-and-host half of a match pattern, which is all Chrome grants. */
+function originOf(pattern: string): string {
+  return /^([^:]+:\/\/[^/]+)\//.exec(pattern)?.[1] ?? pattern;
+}
+
+/**
+ * Change what an existing pin covers.
+ *
+ * Whether the reader sees a dialog is not decided here — it is asked of Chrome,
+ * which is the only thing that knows what it has already granted. Widening to a
+ * new domain prompts; narrowing to a path inside an origin already granted does
+ * not, because Chrome grants whole origins and there is nothing new to ask for.
+ *
+ * The old origin is handed back only when the pin actually moved to a different
+ * one. Giving it back after a narrowing would revoke the very access the
+ * narrowed pin still needs.
+ */
+export async function changePin(oldPattern: string, next: PinCandidate): Promise<PinOutcome> {
+  const already = await browser.permissions
+    .contains({ origins: [next.pattern] })
+    .catch(() => false);
+
+  if (!already) {
+    const granted = await browser.permissions
+      .request({ origins: [next.pattern] })
+      .catch(() => false);
+    if (!granted) return 'declined';
+  }
+
+  try {
+    await browser.scripting
+      .unregisterContentScripts({ ids: [scriptId(oldPattern)] })
+      .catch(() => undefined);
+    await register(next.pattern);
+  } catch {
+    return 'failed';
+  }
+
+  if (originOf(oldPattern) !== originOf(next.pattern)) {
+    await browser.permissions.remove({ origins: [oldPattern] }).catch(() => undefined);
+  }
+
+  const pins = await readPins();
+  await writePins(
+    pins.map((pin) =>
+      pin.pattern === oldPattern
+        ? { pattern: next.pattern, host: next.host, subdomains: next.subdomains }
+        : pin,
+    ),
+  );
+  return 'pinned';
+}

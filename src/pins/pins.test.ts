@@ -4,6 +4,7 @@ import { installFakeChrome, type FakeChrome } from './testing';
 import { pinCandidates } from './patterns';
 import { browser } from 'wxt/browser';
 import {
+  changePin,
   pinFor,
   pinSite,
   readPins,
@@ -168,5 +169,60 @@ describe('keeping the browser and the extension agreeing', () => {
     await chrome.revokeExternally(THIS_SITE!.pattern);
 
     expect(await readPins()).toEqual([]);
+  });
+});
+
+describe('changing what a pin covers', () => {
+  const NARROWER = {
+    pattern: '*://tabs.ultimate-guitar.com/tab/*',
+    host: 'tabs.ultimate-guitar.com',
+    subdomains: false,
+  };
+
+  it('asks again when the pin is widened to a new domain', async () => {
+    await pinSite(THIS_SITE!);
+    chrome.answerWith(true);
+
+    expect(await changePin(THIS_SITE!.pattern, WHOLE_DOMAIN!)).toBe('pinned');
+    expect(chrome.granted.has('*://*.ultimate-guitar.com/*')).toBe(true);
+  });
+
+  it('does not ask when the pin is only narrowed to a path', async () => {
+    await pinSite(THIS_SITE!);
+    // Chrome grants whole origins, so a path inside one already granted is
+    // covered — asking again would be a dialog with nothing behind it.
+    chrome.answerWith(false);
+
+    expect(await changePin(THIS_SITE!.pattern, NARROWER)).toBe('pinned');
+    expect((await readPins())[0]?.pattern).toBe(NARROWER.pattern);
+  });
+
+  it('keeps the origin when only the path changed', async () => {
+    await pinSite(THIS_SITE!);
+    await changePin(THIS_SITE!.pattern, NARROWER);
+    // Handing the origin back here would take the narrowed pin down with it.
+    expect(chrome.granted.has('*://tabs.ultimate-guitar.com/*')).toBe(true);
+  });
+
+  it('gives the old origin back when the pin moved to a different one', async () => {
+    await pinSite(THIS_SITE!);
+    await changePin(THIS_SITE!.pattern, WHOLE_DOMAIN!);
+    expect(chrome.granted.has('*://tabs.ultimate-guitar.com/*')).toBe(false);
+  });
+
+  it('registers the panel for the new pattern and not the old one', async () => {
+    await pinSite(THIS_SITE!);
+    await changePin(THIS_SITE!.pattern, WHOLE_DOMAIN!);
+    const matches = [...chrome.registered.values()].flatMap((script) => script.matches);
+    expect(matches).toEqual(['*://*.ultimate-guitar.com/*']);
+  });
+
+  it('leaves the pin exactly as it was when the reader declines', async () => {
+    await pinSite(THIS_SITE!);
+    chrome.answerWith(false);
+
+    expect(await changePin(THIS_SITE!.pattern, WHOLE_DOMAIN!)).toBe('declined');
+    expect((await readPins())[0]?.pattern).toBe(THIS_SITE!.pattern);
+    expect(chrome.granted.has(THIS_SITE!.pattern)).toBe(true);
   });
 });

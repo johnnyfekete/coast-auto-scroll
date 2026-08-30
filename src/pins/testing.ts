@@ -48,8 +48,29 @@ export function installFakeChrome(): FakeChrome {
     return true;
   }) as unknown as typeof browser.permissions.request;
 
+  /**
+   * Chrome grants whole origins, so a pattern is "contained" whenever some
+   * granted pattern covers its host — a narrower path inside an origin already
+   * granted needs no new dialog. Modelling that here is what keeps the tests
+   * honest about which changes actually prompt the reader.
+   */
+  function hostOf(pattern: string): string {
+    return /^\*:\/\/([^/]+)\//.exec(pattern)?.[1] ?? pattern;
+  }
+  function covers(grantedPattern: string, wanted: string): boolean {
+    const held = hostOf(grantedPattern);
+    const asked = hostOf(wanted);
+    if (held === asked) return true;
+    if (held.startsWith('*.')) {
+      const domain = held.slice(2);
+      const bare = asked.startsWith('*.') ? asked.slice(2) : asked;
+      return bare === domain || bare.endsWith(`.${domain}`);
+    }
+    return false;
+  }
+
   browser.permissions.contains = vi.fn(async ({ origins }: { origins?: string[] }) =>
-    (origins ?? []).every((origin) => granted.has(origin)),
+    (origins ?? []).every((origin) => [...granted].some((held) => covers(held, origin))),
   ) as unknown as typeof browser.permissions.contains;
 
   browser.permissions.remove = vi.fn(async ({ origins }: { origins?: string[] }) => {
