@@ -1,6 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { browser } from 'wxt/browser';
-import { CONTROLLER_SCRIPT, canScrollPage, readTabStatus, setTabSpeed, startTab, stopTab } from './tabs';
+import {
+  CONTROLLER_SCRIPT,
+  canScrollPage,
+  readTabStatus,
+  resolveTargetTab,
+  setTabSpeed,
+  startTab,
+  stopTab,
+} from './tabs';
 import { START, STATUS, STOP } from '@/scroll/protocol';
 
 const TAB = 7;
@@ -86,5 +94,64 @@ describe('talking to a tab', () => {
     send.mockResolvedValue({ ...RUNNING, speed: 80 });
     expect(await setTabSpeed(TAB, 80)).toEqual({ ...RUNNING, speed: 80 });
     expect(execute).not.toHaveBeenCalled();
+  });
+});
+
+describe('choosing the tab the reader means', () => {
+  let query: ReturnType<typeof vi.fn>;
+  let getCurrent: ReturnType<typeof vi.fn>;
+  let originalQuery: typeof browser.tabs.query;
+  let originalGetCurrent: typeof browser.tabs.getCurrent;
+
+  const article = { id: 1, url: 'https://example.com/article', active: true, lastAccessed: 100 };
+  const older = { id: 3, url: 'https://example.com/other', active: false, lastAccessed: 50 };
+  /** An extension page opened in a tab. Chrome reports no url for it. */
+  const ourPage = { id: 2, active: true, lastAccessed: 200 };
+
+  beforeEach(() => {
+    query = vi.fn().mockResolvedValue([]);
+    getCurrent = vi.fn().mockResolvedValue(undefined);
+    originalQuery = browser.tabs.query;
+    originalGetCurrent = browser.tabs.getCurrent;
+    browser.tabs.query = query as unknown as typeof browser.tabs.query;
+    browser.tabs.getCurrent = getCurrent as unknown as typeof browser.tabs.getCurrent;
+  });
+
+  afterEach(() => {
+    browser.tabs.query = originalQuery;
+    browser.tabs.getCurrent = originalGetCurrent;
+  });
+
+  it('is the active tab, which is the page the popup is hanging over', async () => {
+    query.mockResolvedValue([article]);
+    expect((await resolveTargetTab())?.id).toBe(1);
+  });
+
+  it('is still the active tab when that page cannot be scrolled, so the reader is told', async () => {
+    // Opening the popup over a browser page and quietly scrolling a different
+    // tab would be worse than saying this one cannot be scrolled.
+    const settings = { id: 9, url: 'chrome://settings', active: true, lastAccessed: 300 };
+    query.mockResolvedValue([settings]);
+    expect((await resolveTargetTab())?.url).toBe('chrome://settings');
+  });
+
+  it('is never the popup itself when the popup was opened as a tab', async () => {
+    // A real popup is not a tab, so `getCurrent` answers nothing there. When it
+    // answers, this page *is* a tab and scrolling it is never what was meant.
+    getCurrent.mockResolvedValue(ourPage);
+    query.mockResolvedValue([ourPage, article, older]);
+    expect((await resolveTargetTab())?.id).toBe(1);
+  });
+
+  it('falls back to the page looked at most recently', async () => {
+    getCurrent.mockResolvedValue(ourPage);
+    query.mockResolvedValue([ourPage, older, article]);
+    expect((await resolveTargetTab())?.id).toBe(1);
+  });
+
+  it('has no answer when there is no other tab at all', async () => {
+    getCurrent.mockResolvedValue(ourPage);
+    query.mockResolvedValue([ourPage]);
+    expect(await resolveTargetTab()).toBeNull();
   });
 });

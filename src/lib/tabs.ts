@@ -83,3 +83,33 @@ export function stopTab(tabId: number): Promise<ScrollStatus | null> {
 export function setTabSpeed(tabId: number, speed: number): Promise<ScrollStatus | null> {
   return ask(tabId, { type: SET_SPEED, speed });
 }
+
+/**
+ * The tab the reader means: the active one, which is the page the popup is
+ * hanging over.
+ *
+ * The exception is the popup opened as an ordinary tab — which a reader can do,
+ * and which a test harness has to do, since nothing outside Chrome can click a
+ * toolbar button. `tabs.getCurrent` is what tells the two apart: an extension
+ * page running in a real popup is not in a tab and gets nothing back, while one
+ * running in a tab gets that tab. Reading the url instead would not work, since
+ * Chrome reports no url for our own pages without the broad `tabs` permission
+ * this extension refuses to ask for.
+ *
+ * An active tab that cannot be scrolled is still the answer. Quietly scrolling
+ * some other tab instead of saying "not this page" would be worse than the
+ * disappointment it avoids.
+ */
+export async function resolveTargetTab(): Promise<{ id?: number; url?: string } | null> {
+  const self = await browser.tabs.getCurrent();
+  if (self === undefined) {
+    const [active] = await browser.tabs.query({ active: true, currentWindow: true });
+    return active ?? null;
+  }
+
+  const others = (await browser.tabs.query({})).filter((tab) => tab.id !== self.id);
+  if (others.length === 0) return null;
+  return others.reduce((newest, tab) =>
+    (tab.lastAccessed ?? 0) > (newest.lastAccessed ?? 0) ? tab : newest,
+  );
+}

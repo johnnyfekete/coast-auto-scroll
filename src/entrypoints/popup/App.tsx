@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { browser } from 'wxt/browser';
-import { canScrollPage, readTabStatus, setTabSpeed, startTab, stopTab } from '@/lib/tabs';
+import {
+  canScrollPage,
+  readTabStatus,
+  resolveTargetTab,
+  setTabSpeed,
+  startTab,
+  stopTab,
+} from '@/lib/tabs';
 import { readSettings, saveSpeed } from '@/lib/settings';
 import {
   DEFAULT_SPEED_PX_PER_S,
@@ -34,7 +40,7 @@ export default function App() {
       const settings = await readSettings();
       setSpeed(settings.speed);
 
-      const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+      const tab = await resolveTargetTab();
       if (tab?.id === undefined || !canScrollPage(tab.url ?? '')) {
         setPage({ kind: 'closed' });
         return;
