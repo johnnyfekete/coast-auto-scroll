@@ -1,7 +1,7 @@
 import { browser } from 'wxt/browser';
 import { installController } from '@/scroll/controller';
 import { createPanel } from '@/panel/mount';
-import { saveSpeed } from '@/lib/settings';
+import { readSettings, savePanelPosition, saveSpeed, watchSettings } from '@/lib/settings';
 import { OPEN_OPTIONS, UNPIN } from '@/pins/protocol';
 
 /**
@@ -29,6 +29,7 @@ export default defineUnlistedScript(() => {
     },
     onSpeed: (speed) => controller.setSpeed(speed),
     onCommit: (speed) => void saveSpeed(speed),
+    onMove: (position) => void savePanelPosition(position),
 
     // A content script can call neither `permissions` nor `scripting`, so this
     // is a request rather than an action. The worker works out which pin covers
@@ -51,4 +52,9 @@ export default defineUnlistedScript(() => {
 
   controller.subscribe((status) => panel.render(status));
   panel.render(controller.status());
+
+  void readSettings().then((settings) => panel.place(settings.panelPosition));
+  // One position for every site, so a panel moved in one tab moves in the rest
+  // of them too rather than waiting for each to be reloaded.
+  watchSettings((settings) => panel.place(settings.panelPosition));
 });

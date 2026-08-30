@@ -1,5 +1,6 @@
 import { browser } from 'wxt/browser';
 import { clampSpeed, DEFAULT_SPEED_PX_PER_S } from '@/scroll/speed';
+import { DEFAULT_POSITION, type Position } from '@/panel/position';
 
 /**
  * Everything Coast remembers, and the only module that touches
@@ -17,16 +18,33 @@ const KEY = 'settings';
 export type Settings = {
   /** The speed used where nothing more specific is remembered. */
   speed: number;
+  /**
+   * Where the on-page panel sits, shared by every site. See `position.ts` for
+   * why it is one position rather than one per site.
+   */
+  panelPosition: Position;
 };
 
 const DEFAULTS: Settings = {
   speed: DEFAULT_SPEED_PX_PER_S,
+  panelPosition: DEFAULT_POSITION,
 };
 
+function toPosition(stored: unknown): Position {
+  const value = stored as Partial<Position> | null | undefined;
+  if (typeof value?.right !== 'number' || typeof value?.bottom !== 'number') {
+    return DEFAULTS.panelPosition;
+  }
+  // Held inside the viewport by whoever draws it, not here: this module has no
+  // window to measure, and a position is only wrong relative to one.
+  return { right: value.right, bottom: value.bottom };
+}
+
 function toSettings(stored: unknown): Settings {
-  const speed = (stored as { speed?: unknown } | null | undefined)?.speed;
+  const value = stored as { speed?: unknown; panelPosition?: unknown } | null | undefined;
   return {
-    speed: typeof speed === 'number' ? clampSpeed(speed) : DEFAULTS.speed,
+    speed: typeof value?.speed === 'number' ? clampSpeed(value.speed) : DEFAULTS.speed,
+    panelPosition: toPosition(value?.panelPosition),
   };
 }
 
@@ -47,6 +65,11 @@ export async function readSettings(): Promise<Settings> {
 export async function saveSpeed(speed: number): Promise<void> {
   const settings = await readSettings();
   await browser.storage.local.set({ [KEY]: { ...settings, speed: clampSpeed(speed) } });
+}
+
+export async function savePanelPosition(panelPosition: Position): Promise<void> {
+  const settings = await readSettings();
+  await browser.storage.local.set({ [KEY]: { ...settings, panelPosition } });
 }
 
 /** Calls `cb` whenever settings change, and returns the unsubscribe. */

@@ -1,5 +1,6 @@
 import type { ScrollStatus } from '@/scroll/protocol';
 import { formatSpeed, fractionToSpeed, speedToFraction } from '@/scroll/speed';
+import { clampPosition, DEFAULT_POSITION, positionFromDrag, type Position } from './position';
 
 /**
  * The control that sits on a pinned page.
@@ -45,7 +46,13 @@ const STYLE = `
   font: 600 12px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   color: #fff;
   -webkit-font-smoothing: antialiased;
+  /* The background is the drag handle. The controls inside it are not, which is
+     what keeps a speed adjustment from also moving the panel. */
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
 }
+.panel.dragging { cursor: grabbing; }
 .panel[hidden] { display: none; }
 
 /* Dark glass in both themes, unlike the extension's own pages. This floats over
@@ -144,15 +151,16 @@ export type PanelHandlers = {
   onSpeed: (speed: number) => void;
   /** Fires once, when the thumb is let go. The one that writes to storage. */
   onCommit: (speed: number) => void;
+  /** Fires once, when the panel is dropped somewhere new. */
+  onMove: (position: Position) => void;
 };
 
 export type Panel = {
   render: (status: ScrollStatus) => void;
+  /** Put the panel somewhere, holding it inside the viewport. */
+  place: (position: Position) => void;
   destroy: () => void;
 };
-
-/** Where the panel sits when nothing has moved it. */
-export const DEFAULT_POSITION = { right: 16, bottom: 16 };
 
 export function createPanel(handlers: PanelHandlers): Panel {
   const host = document.createElement('div');
@@ -196,6 +204,22 @@ export function createPanel(handlers: PanelHandlers): Panel {
   document.body.appendChild(host);
 
   let dragging = false;
+  let position: Position = DEFAULT_POSITION;
+
+  function place(next: Position) {
+    position = clampPosition(next, viewportSize(), panelSize());
+    panel.style.right = `${position.right}px`;
+    panel.style.bottom = `${position.bottom}px`;
+  }
+
+  function viewportSize() {
+    return { width: window.innerWidth, height: window.innerHeight };
+  }
+
+  function panelSize() {
+    const rect = panel.getBoundingClientRect();
+    return { width: rect.width, height: rect.height };
+  }
 
   function speedFromSlider(): number {
     return fractionToSpeed(Number(slider.value) / SLIDER_STEPS);
@@ -210,6 +234,45 @@ export function createPanel(handlers: PanelHandlers): Panel {
   }
 
   toggle.addEventListener('click', () => handlers.onToggle());
+
+  // Dragging starts on the panel's own background only. A pointerdown that
+  // landed on a control belongs to that control — a slider you cannot adjust
+  // without also moving the panel is worse than one that cannot be moved.
+  let drag: { pointerId: number; from: Position; startX: number; startY: number } | null = null;
+
+  panel.addEventListener('pointerdown', (event) => {
+    if (event.target !== panel) return;
+    drag = { pointerId: event.pointerId, from: position, startX: event.clientX, startY: event.clientY };
+    panel.classList.add('dragging');
+    panel.setPointerCapture(event.pointerId);
+  });
+
+  panel.addEventListener('pointermove', (event) => {
+    if (drag === null || event.pointerId !== drag.pointerId) return;
+    place(
+      positionFromDrag(
+        drag.from,
+        { x: event.clientX - drag.startX, y: event.clientY - drag.startY },
+        viewportSize(),
+        panelSize(),
+      ),
+    );
+  });
+
+  function endDrag(event: PointerEvent) {
+    if (drag === null || event.pointerId !== drag.pointerId) return;
+    drag = null;
+    panel.classList.remove('dragging');
+    panel.releasePointerCapture(event.pointerId);
+    // One write per drop, rather than one per pixel of the drag.
+    handlers.onMove(position);
+  }
+  panel.addEventListener('pointerup', endDrag);
+  panel.addEventListener('pointercancel', endDrag);
+
+  // A window that narrowed while the panel sat near an edge would otherwise
+  // leave it hanging outside the viewport.
+  window.addEventListener('resize', () => place(position));
 
   function closeMenu() {
     menu.hidden = true;
@@ -265,6 +328,7 @@ export function createPanel(handlers: PanelHandlers): Panel {
       // the pointer.
       if (!dragging) slider.value = String(Math.round(speedToFraction(status.speed) * SLIDER_STEPS));
     },
+    place,
     destroy() {
       host.remove();
     },
