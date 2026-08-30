@@ -152,11 +152,14 @@ export default function App() {
 
   return (
     <main className="mx-auto min-h-screen max-w-2xl bg-white px-6 py-10 text-neutral-900 dark:bg-neutral-950 dark:text-neutral-50">
-      <header className="pb-6">
-        <h1 className="text-xl font-semibold tracking-tight">Coast</h1>
-        <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-          Auto scroll for reading. Coast can only reach the sites listed below.
-        </p>
+      <header className="flex items-center gap-3 pb-6">
+        <img src="/icon/48.png" alt="" width={40} height={40} className="rounded-[9px]" />
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">Coast</h1>
+          <p className="text-sm text-neutral-500 dark:text-neutral-400">
+            Auto scroll for reading. Coast can only reach the sites listed below.
+          </p>
+        </div>
       </header>
 
       <Section

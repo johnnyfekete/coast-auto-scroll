@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFB347"/>
+      <stop offset="55%" stop-color="#FF8A1F"/>
+      <stop offset="100%" stop-color="#F0568C"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="128" height="128" rx="28" fill="url(#sky)"/>
+
+  <!-- A sun going down: the mark reads as a horizon at 16px, where anything
+       with more detail turns to mush. -->
+  <circle cx="64" cy="62" r="23" fill="#FFF7EC"/>
+
+  <!-- The horizon, and the water below it. Two bars rather than one so the
+       eye reads distance rather than a struck-through circle. -->
+  <rect x="16" y="84" width="96" height="9" rx="4.5" fill="#FFF7EC"/>
+  <rect x="34" y="102" width="60" height="8" rx="4" fill="#FFF7EC" opacity="0.72"/>
+</svg>

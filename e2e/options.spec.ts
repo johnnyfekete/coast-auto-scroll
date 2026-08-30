@@ -67,7 +67,12 @@ test.describe('the keyboard shortcut', () => {
     // reachable — and what actually breaks in the wild — is the command being
     // missing or arriving with a default that collides with something.
     const options = await openOptions(context);
-    const commands = await options.evaluate(() => chrome.commands.getAll());
+    const commands = await options.evaluate(
+      () =>
+        (globalThis as unknown as {
+          chrome: { commands: { getAll: () => Promise<{ name?: string; shortcut?: string }[]> } };
+        }).chrome.commands.getAll(),
+    );
 
     expect(commands.map((command) => command.name)).toContain('toggle-scroll');
     expect(commands.find((command) => command.name === 'toggle-scroll')?.shortcut).toBe('');

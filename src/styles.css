@@ -1,1 +1,28 @@
 @import 'tailwindcss';
+
+/*
+ * The extension's own pages follow the reader's system theme. The on-page panel
+ * deliberately does not — see `panel/mount.ts`: it floats over content whose
+ * colour is unknown, and a panel that follows the theme disappears against half
+ * the web.
+ *
+ * `color-scheme` is what makes the browser's own furniture agree: form
+ * controls, scrollbars, and the flash of background before the first paint.
+ * Without it a dark popup opens with a white frame around it.
+ */
+:root {
+  color-scheme: light dark;
+}
+
+body {
+  margin: 0;
+  background: #ffffff;
+  color: #171717;
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background: #0a0a0a;
+    color: #fafafa;
+  }
+}
