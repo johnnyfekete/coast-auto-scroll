@@ -8,6 +8,7 @@ import {
   setTabSpeed,
   startTab,
   stopTab,
+  toggleTab,
 } from './tabs';
 import { START, STATUS, STOP } from '@/scroll/protocol';
 
@@ -153,5 +154,50 @@ describe('choosing the tab the reader means', () => {
     getCurrent.mockResolvedValue(ourPage);
     query.mockResolvedValue([ourPage]);
     expect(await resolveTargetTab()).toBeNull();
+  });
+});
+
+describe('toggling a tab', () => {
+  let send: ReturnType<typeof vi.fn>;
+  let execute: ReturnType<typeof vi.fn>;
+  let originalSend: typeof browser.tabs.sendMessage;
+  let originalExecute: typeof browser.scripting.executeScript;
+
+  beforeEach(() => {
+    send = vi.fn();
+    execute = vi.fn().mockResolvedValue([]);
+    originalSend = browser.tabs.sendMessage;
+    originalExecute = browser.scripting.executeScript;
+    browser.tabs.sendMessage = send as unknown as typeof browser.tabs.sendMessage;
+    browser.scripting.executeScript = execute as unknown as typeof browser.scripting.executeScript;
+  });
+
+  afterEach(() => {
+    browser.tabs.sendMessage = originalSend;
+    browser.scripting.executeScript = originalExecute;
+  });
+
+  it('stops a tab that is scrolling', async () => {
+    send.mockResolvedValue(RUNNING);
+    await toggleTab(TAB, 20);
+    expect(send).toHaveBeenLastCalledWith(TAB, { type: STOP });
+  });
+
+  it('starts a tab that is not', async () => {
+    send.mockResolvedValue({ ...RUNNING, running: false });
+    await toggleTab(TAB, 45);
+    expect(send).toHaveBeenLastCalledWith(TAB, { type: START, speed: 45 });
+  });
+
+  it('installs a controller in a tab that has none, then starts it', async () => {
+    // Nothing has been pressed in this tab before, so there is nothing to ask.
+    send.mockRejectedValueOnce(new Error('Receiving end does not exist'));
+    send.mockRejectedValueOnce(new Error('Receiving end does not exist'));
+    send.mockResolvedValue(RUNNING);
+
+    await toggleTab(TAB, 45);
+
+    expect(execute).toHaveBeenCalled();
+    expect(send).toHaveBeenLastCalledWith(TAB, { type: START, speed: 45 });
   });
 });

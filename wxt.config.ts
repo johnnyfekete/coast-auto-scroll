@@ -62,5 +62,14 @@ export default defineConfig({
     permissions: ['activeTab', 'scripting', 'storage'],
     optional_host_permissions: ['*://*/*'],
     action: {},
+    /**
+     * No `suggested_key`, deliberately. A default binding is how an extension
+     * collides with the shortcut a reader already uses for something else, and
+     * Chrome silently drops the loser — so it is left unset and the settings
+     * page points at chrome://extensions/shortcuts.
+     */
+    commands: {
+      'toggle-scroll': { description: 'Toggle auto scroll on this page' },
+    },
   },
 });

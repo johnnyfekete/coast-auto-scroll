@@ -2,6 +2,8 @@ import { browser } from 'wxt/browser';
 import { pinFor, reconcilePins, unpinSite, watchRevokedPermissions, type Pin } from '@/pins/pins';
 import { isPinRequest, OPEN_OPTIONS, UNPIN, type PinRequest } from '@/pins/protocol';
 import { injectPanel } from '@/lib/inject';
+import { canScrollPage, toggleTab } from '@/lib/tabs';
+import { speedForSite } from '@/lib/site-speed';
 
 /**
  * The worker exists for two things the rest of the extension cannot do for
@@ -37,6 +39,11 @@ export default defineBackground(() => {
     }
 
     return undefined;
+  });
+
+  browser.commands.onCommand.addListener((command) => {
+    if (command !== 'toggle-scroll') return;
+    void toggleActiveTab();
   });
 
   showPanelOnNewlyPinnedTabs();
@@ -81,4 +88,22 @@ function showPanelOnNewlyPinnedTabs(): void {
         .catch(() => undefined);
     }
   });
+}
+
+/**
+ * What the keyboard shortcut does.
+ *
+ * The active tab rather than a remembered one: a shortcut is pressed while
+ * looking at something, and the thing being looked at is the answer. Pages no
+ * script can be injected into are left alone rather than failing — there is no
+ * popup open to explain a failure to.
+ */
+async function toggleActiveTab(): Promise<void> {
+  const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+  if (tab?.id === undefined) return;
+
+  const url = tab.url ?? '';
+  if (!canScrollPage(url)) return;
+
+  await toggleTab(tab.id, await speedForSite(url));
 }

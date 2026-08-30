@@ -59,3 +59,17 @@ test.describe('the settings page', () => {
     await expect(options.getByText('No shortcut set.')).toBeVisible();
   });
 });
+
+test.describe('the keyboard shortcut', () => {
+  test('is declared, and ships with nothing bound to it', async ({ context }) => {
+    // Chrome offers no way to assign a binding from outside its own settings
+    // UI, so what a bound key does is not reachable from here. What is
+    // reachable — and what actually breaks in the wild — is the command being
+    // missing or arriving with a default that collides with something.
+    const options = await openOptions(context);
+    const commands = await options.evaluate(() => chrome.commands.getAll());
+
+    expect(commands.map((command) => command.name)).toContain('toggle-scroll');
+    expect(commands.find((command) => command.name === 'toggle-scroll')?.shortcut).toBe('');
+  });
+});

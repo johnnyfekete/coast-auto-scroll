@@ -113,3 +113,16 @@ export async function resolveTargetTab(): Promise<{ id?: number; url?: string } 
     (tab.lastAccessed ?? 0) > (newest.lastAccessed ?? 0) ? tab : newest,
   );
 }
+
+/**
+ * Start a tab, or stop it if it is already going.
+ *
+ * What the keyboard shortcut does. The status read comes first and does not
+ * inject, so a shortcut pressed on a tab that has never been scrolled reaches
+ * `startTab`, which installs the controller — and one pressed on a tab that is
+ * scrolling stops it without any of that.
+ */
+export async function toggleTab(tabId: number, speed: number): Promise<ScrollStatus | null> {
+  const status = await readTabStatus(tabId);
+  return status?.running === true ? stopTab(tabId) : startTab(tabId, speed);
+}
