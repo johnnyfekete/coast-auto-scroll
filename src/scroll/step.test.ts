@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  BOTTOM_STALL_MS,
   DRIFT_TOLERANCE_PX,
   MAX_STEP_MS,
   OVERRIDE_PAUSE_MS,
@@ -113,5 +114,57 @@ describe('initialState', () => {
   it('does not move the page on the very first step', () => {
     const first = tick(initialState(742, 5_000), 5_000, 0);
     expect(first.scrollTo).toBe(742);
+  });
+});
+
+describe('the end of the page', () => {
+  const SHORT = { max: 1_000, speed: 100 };
+
+  /** A step at the very bottom of a page that is not growing. */
+  function atBottom(state: ScrollState, now: number, max = SHORT.max) {
+    return step(state, { now, elapsed: 16, actual: Math.min(state.position, max), max, speed: 100 });
+  }
+
+  it('does not give up the moment it touches the bottom', () => {
+    // An infinite feed grows underneath us. A crawl that stopped on first
+    // reaching the end would never see what loaded a second later.
+    const arrived = step(initialState(999, 0), { now: 0, elapsed: 100, actual: 999, ...SHORT });
+    expect(arrived.finished).toBe(false);
+  });
+
+  it('finishes once the bottom has stopped moving', () => {
+    let state = step(initialState(999, 0), { now: 0, elapsed: 100, actual: 999, ...SHORT }).state;
+    const ended = atBottom(state, BOTTOM_STALL_MS + 1);
+    expect(ended.finished).toBe(true);
+  });
+
+  it('keeps going while the page is still growing', () => {
+    // Each step finds more page than the last, which is what an infinite feed
+    // loading looks like from here.
+    let state = initialState(999, 0);
+    let max = 1_000;
+    for (let now = 0; now < BOTTOM_STALL_MS * 3; now += 100) {
+      const result = atBottom(state, now, max);
+      expect(result.finished).toBe(false);
+      state = result.state;
+      max += 500;
+    }
+  });
+
+  it('forgets the wait when the reader scrolls back up', () => {
+    let state = atBottom(initialState(1_000, 0), 0).state;
+    const scrolledUp = step(state, { now: 100, elapsed: 16, actual: 200, ...SHORT });
+    const later = step(scrolledUp.state, {
+      now: 100 + OVERRIDE_PAUSE_MS + 1,
+      elapsed: 16,
+      actual: 200,
+      ...SHORT,
+    });
+    expect(later.finished).toBe(false);
+  });
+
+  it('is not finished part way down a page', () => {
+    const middle = tick(initialState(0, 0), 0, 100);
+    expect(middle.finished).toBe(false);
   });
 });

@@ -1,0 +1,17 @@
+<!doctype html>
+<html>
+  <head><meta charset="utf-8" /><title>A page that keeps growing</title></head>
+  <body style="margin:0">
+    <div id="feed" style="height:900px"></div>
+    <script>
+      // What an infinite feed looks like from the outside: the bottom keeps
+      // moving away, in bursts well under the stall window.
+      const feed = document.getElementById('feed');
+      let height = 900;
+      setInterval(() => {
+        height += 600;
+        feed.style.height = height + 'px';
+      }, 500);
+    </script>
+  </body>
+</html>

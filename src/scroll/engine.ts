@@ -72,6 +72,14 @@ export function createEngine(initialSpeed: number, onStop: () => void): Engine {
     previous = now;
     state = result.state;
     if (result.scrollTo !== null) scroller.scrollTo(result.scrollTo);
+
+    // The page ended: the bottom stopped moving and stayed still. Scroll to the
+    // last position first, then stop — the reader should be left looking at the
+    // end of the page rather than a frame short of it.
+    if (result.finished) {
+      halt();
+      onStop();
+    }
   }
 
   return {

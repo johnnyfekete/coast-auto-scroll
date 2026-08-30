@@ -41,11 +41,32 @@ export const DRIFT_TOLERANCE_PX = 2;
  */
 export const MAX_STEP_MS = 100;
 
+/**
+ * How long the crawl sits at the bottom of a page, finding no more page, before
+ * it calls the reading finished.
+ *
+ * The alternatives are both wrong, each for one case. Stopping the instant the
+ * bottom is reached kills a crawl on an infinite feed that has merely paused to
+ * load; never stopping at all leaves the control claiming to run for the rest
+ * of the afternoon after an article has ended. Waiting is what tells those two
+ * apart, and three seconds is long enough for a feed to fetch and short enough
+ * that a finished article does not sit there.
+ */
+export const BOTTOM_STALL_MS = 3_000;
+
 export type ScrollState = {
   /** Where we last asked the page to be, in fractional pixels. */
   position: number;
   /** Time until which the crawl keeps its hands off. */
   pausedUntil: number;
+  /**
+   * When the page first stopped having anywhere left to go, or null while it
+   * still does. This is the whole of the end-of-page rule's memory, which is
+   * why the rule lives here rather than as a timer in the animation loop: a
+   * timer would have to be started, cancelled and re-started by the loop, and
+   * none of that could be tested without a real page.
+   */
+  stalledSince: number | null;
 };
 
 export type ScrollInput = {
@@ -64,11 +85,13 @@ export type ScrollStep = {
   state: ScrollState;
   /** Where to put the page, or null to leave it exactly where it is. */
   scrollTo: number | null;
+  /** True once the page has ended: at the bottom, with no more of it arriving. */
+  finished: boolean;
 };
 
 /** A state that will not move the page until the next step says to. */
 export function initialState(actual: number, now: number): ScrollState {
-  return { position: actual, pausedUntil: now };
+  return { position: actual, pausedUntil: now, stalledSince: null };
 }
 
 export function step(state: ScrollState, input: ScrollInput): ScrollStep {
@@ -82,8 +105,15 @@ export function step(state: ScrollState, input: ScrollInput): ScrollStep {
   // rather than shortly after the first.
   if (Math.abs(actual - state.position) > DRIFT_TOLERANCE_PX) {
     return {
-      state: { position: actual, pausedUntil: input.now + OVERRIDE_PAUSE_MS },
+      state: {
+        position: actual,
+        pausedUntil: input.now + OVERRIDE_PAUSE_MS,
+        // A reader who moves the page is not a page that has ended, even if
+        // they moved it while sitting at the bottom.
+        stalledSince: null,
+      },
       scrollTo: null,
+      finished: false,
     };
   }
 
@@ -91,7 +121,11 @@ export function step(state: ScrollState, input: ScrollInput): ScrollStep {
   // once and stops resumes from where they left it rather than from where the
   // pause began.
   if (input.now < state.pausedUntil) {
-    return { state: { position: actual, pausedUntil: state.pausedUntil }, scrollTo: null };
+    return {
+      state: { position: actual, pausedUntil: state.pausedUntil, stalledSince: state.stalledSince },
+      scrollTo: null,
+      finished: false,
+    };
   }
 
   const elapsed = Number.isFinite(input.elapsed)
@@ -103,5 +137,17 @@ export function step(state: ScrollState, input: ScrollInput): ScrollStep {
   // underneath us, and a crawl that switched itself off on first touching the
   // end would never see the content that arrived a moment later.
   const next = Math.min(max, state.position + (speed * elapsed) / 1000);
-  return { state: { position: next, pausedUntil: state.pausedUntil }, scrollTo: next };
+
+  // Being at the bottom is the clamp having bitten: there was further to go and
+  // the page had nowhere to put it. A page that grows lifts `max` above `next`
+  // again on the very next step, which is what clears the wait without anything
+  // having to watch for growth explicitly.
+  const atBottom = next >= max;
+  const stalledSince = atBottom ? (state.stalledSince ?? input.now) : null;
+
+  return {
+    state: { position: next, pausedUntil: state.pausedUntil, stalledSince },
+    scrollTo: next,
+    finished: stalledSince !== null && input.now - stalledSince >= BOTTOM_STALL_MS,
+  };
 }
