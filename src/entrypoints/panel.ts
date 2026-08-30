@@ -1,7 +1,8 @@
 import { browser } from 'wxt/browser';
 import { installController } from '@/scroll/controller';
 import { createPanel } from '@/panel/mount';
-import { readSettings, savePanelPosition, saveSpeed, watchSettings } from '@/lib/settings';
+import { readSettings, savePanelPosition, watchSettings } from '@/lib/settings';
+import { saveSpeedForSite } from '@/lib/site-speed';
 import { OPEN_OPTIONS, UNPIN } from '@/pins/protocol';
 
 /**
@@ -28,7 +29,7 @@ export default defineUnlistedScript(() => {
       else controller.start();
     },
     onSpeed: (speed) => controller.setSpeed(speed),
-    onCommit: (speed) => void saveSpeed(speed),
+    onCommit: (speed) => void saveSpeedForSite(location.href, speed),
     onMove: (position) => void savePanelPosition(position),
 
     // A content script can call neither `permissions` nor `scripting`, so this

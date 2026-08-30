@@ -24,6 +24,12 @@ export type Pin = {
   /** The host or domain it covers, for showing to the reader. */
   host: string;
   subdomains: boolean;
+  /**
+   * The speed last chosen on this site, if any. A guitar tab and a news feed
+   * want speeds an order of magnitude apart, and a reader should not have to
+   * re-find each of them on every visit.
+   */
+  speed?: number;
 };
 
 export type PinOutcome = 'pinned' | 'declined' | 'failed';
@@ -119,6 +125,17 @@ export async function unpinSite(pattern: string): Promise<void> {
   await browser.permissions.remove({ origins: [pattern] }).catch(() => undefined);
   const pins = await readPins();
   await writePins(pins.filter((pin) => pin.pattern !== pattern));
+}
+
+/**
+ * Store the speed the reader chose on a pinned site.
+ *
+ * Read-modify-write over the whole list, which is safe here because pins change
+ * one at a time and only ever by a deliberate act of the reader's.
+ */
+export async function setPinSpeed(pattern: string, speed: number): Promise<void> {
+  const pins = await readPins();
+  await writePins(pins.map((pin) => (pin.pattern === pattern ? { ...pin, speed } : pin)));
 }
 
 /** The pin covering this page, if any. */

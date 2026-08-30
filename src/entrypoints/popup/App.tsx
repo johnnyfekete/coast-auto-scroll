@@ -7,7 +7,7 @@ import {
   startTab,
   stopTab,
 } from '@/lib/tabs';
-import { readSettings, saveSpeed } from '@/lib/settings';
+import { saveSpeedForSite, speedForSite } from '@/lib/site-speed';
 import PinControl from './PinControl';
 import {
   DEFAULT_SPEED_PX_PER_S,
@@ -38,14 +38,15 @@ export default function App() {
 
   useEffect(() => {
     void (async () => {
-      const settings = await readSettings();
-      setSpeed(settings.speed);
-
       const tab = await resolveTargetTab();
       if (tab?.id === undefined || !canScrollPage(tab.url ?? '')) {
         setPage({ kind: 'closed' });
         return;
       }
+
+      // A pinned site keeps its own speed, so this is asked by page rather
+      // than read from the global default.
+      setSpeed(await speedForSite(tab.url ?? ''));
 
       // A plain read, with no injection behind it: opening the popup on a page
       // is not a request to install anything in it.
@@ -85,7 +86,7 @@ export default function App() {
   // for one choice.
   function onCommit() {
     dragging.current = false;
-    void saveSpeed(speed);
+    if (page.kind === 'open') void saveSpeedForSite(page.url, speed);
   }
 
   const running = page.kind === 'open' && page.running;

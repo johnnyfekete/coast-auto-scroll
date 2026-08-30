@@ -9,6 +9,7 @@ import {
   type ScrollStatus,
 } from './protocol';
 import { readSettings, watchSettings } from '@/lib/settings';
+import { speedForSite } from '@/lib/site-speed';
 import { DEFAULT_SPEED_PX_PER_S } from './speed';
 
 /**
@@ -43,6 +44,15 @@ type ControllerHost = typeof globalThis & { [CONTROLLER_KEY]?: ScrollController 
 function build(): ScrollController {
   const listeners = new Set<(status: ScrollStatus) => void>();
 
+  /**
+   * Whether anyone has set a speed on this page by hand.
+   *
+   * Resolving the stored speed is asynchronous, so it can land *after* a reader
+   * has already moved the slider — and silently undo them. Anything the reader
+   * did wins over anything storage says, for as long as the page is open.
+   */
+  let chosenByHand = false;
+
   function status(): ScrollStatus {
     return {
       running: engine.running(),
@@ -68,8 +78,12 @@ function build(): ScrollController {
   // started scrolling inside that tick — at the default, and then corrected.
   // Better than a controller that cannot answer a status request until storage
   // has replied.
-  void readSettings().then((settings) => {
-    engine.setSpeed(settings.speed);
+  // The speed is asked for by page rather than read straight from settings: a
+  // pinned site keeps its own, and the controller is the one thing both the
+  // popup and the panel talk to, so resolving it here is what stops them
+  // disagreeing about the speed this page is at.
+  void Promise.all([speedForSite(location.href), readSettings()]).then(([speed, settings]) => {
+    if (!chosenByHand) engine.setSpeed(speed);
     engine.setManualScroll(settings.manualScroll);
     announce();
   });
@@ -77,9 +91,13 @@ function build(): ScrollController {
   // A page stays open across a change made on the settings page, so the answer
   // read above has to keep being re-read.
   watchSettings((settings) => {
-    engine.setSpeed(settings.speed);
     engine.setManualScroll(settings.manualScroll);
-    announce();
+    // Re-resolved rather than taken from the change, because on a pinned site
+    // the default that just changed is not the speed this page uses.
+    void speedForSite(location.href).then((speed) => {
+      if (!chosenByHand) engine.setSpeed(speed);
+      announce();
+    });
   });
 
   const controller: ScrollController = {
@@ -95,6 +113,7 @@ function build(): ScrollController {
       return status();
     },
     setSpeed(speed) {
+      chosenByHand = true;
       engine.setSpeed(speed);
       announce();
       return status();

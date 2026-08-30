@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { browser } from 'wxt/browser';
-import { changePin, readPins, unpinSite, type Pin } from '@/pins/pins';
+import { changePin, readPins, setPinSpeed, unpinSite, type Pin } from '@/pins/pins';
 import { DEFAULT_POSITION } from '@/panel/position';
 import { readSettings, saveManualScroll, savePanelPosition, saveSpeed } from '@/lib/settings';
 import type { ManualScroll } from '@/scroll/step';
@@ -33,8 +33,25 @@ function Section({
   );
 }
 
-function PinRow({ pin, onChanged }: { pin: Pin; onChanged: () => void }) {
+function PinRow({
+  pin,
+  fallbackSpeed,
+  onChanged,
+}: {
+  pin: Pin;
+  /** Shown when this site has no speed of its own yet. */
+  fallbackSpeed: number;
+  onChanged: () => void;
+}) {
   const [pattern, setPattern] = useState(pin.pattern);
+  const [siteSpeed, setSiteSpeedValue] = useState(pin.speed ?? fallbackSpeed);
+  const [touched, setTouched] = useState(false);
+
+  function setSiteSpeed(next: number) {
+    setTouched(true);
+    setSiteSpeedValue(next);
+  }
+
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -85,6 +102,25 @@ function PinRow({ pin, onChanged }: { pin: Pin; onChanged: () => void }) {
       >
         Unpin
       </button>
+      <div className="flex w-full items-center gap-3 pl-1">
+        <input
+          type="range"
+          min={0}
+          max={SLIDER_STEPS}
+          step={1}
+          value={Math.round(speedToFraction(siteSpeed) * SLIDER_STEPS)}
+          aria-label={`Speed on ${pin.host}`}
+          onChange={(event) =>
+            setSiteSpeed(fractionToSpeed(Number(event.target.value) / SLIDER_STEPS))
+          }
+          onPointerUp={() => void setPinSpeed(pin.pattern, siteSpeed)}
+          onKeyUp={() => void setPinSpeed(pin.pattern, siteSpeed)}
+          className="w-48 accent-amber-500"
+        />
+        <span className="text-xs tabular-nums text-neutral-500 dark:text-neutral-400">
+          {pin.speed === undefined && !touched ? 'Default speed' : formatSpeed(siteSpeed)}
+        </span>
+      </div>
       {note !== null && (
         <p className="w-full text-xs text-neutral-500 dark:text-neutral-400">{note}</p>
       )}
@@ -135,7 +171,7 @@ export default function App() {
         ) : (
           <ul data-testid="pins" className="divide-y divide-neutral-100 dark:divide-neutral-900">
             {pins.map((pin) => (
-              <PinRow key={pin.pattern} pin={pin} onChanged={refresh} />
+              <PinRow key={pin.pattern} pin={pin} fallbackSpeed={speed} onChanged={refresh} />
             ))}
           </ul>
         )}
