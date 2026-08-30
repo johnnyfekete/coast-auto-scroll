@@ -139,7 +139,7 @@ export default function App() {
 
       {page.kind === 'open' && (
         <div className="mt-4 border-t border-neutral-200 pt-3 dark:border-neutral-800">
-          <PinControl url={page.url} tabId={page.tabId} />
+          <PinControl url={page.url} />
         </div>
       )}
 

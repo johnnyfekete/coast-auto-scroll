@@ -126,3 +126,54 @@ export async function pinFor(url: string): Promise<Pin | null> {
   const pins = await readPins();
   return pins.find((pin) => patternMatches(pin.pattern, url)) ?? null;
 }
+
+/**
+ * Make the three halves of every pin agree again.
+ *
+ * They drift apart without the extension being involved: a reader can revoke a
+ * site from `chrome://extensions`, and registrations survive restarts on their
+ * own terms. The permission is treated as the truth, because it is the only one
+ * of the three the reader controls directly — a record or a registration
+ * without it is a claim the browser has already refused.
+ */
+export async function reconcilePins(): Promise<void> {
+  const pins = await readPins();
+  const kept: Pin[] = [];
+
+  for (const pin of pins) {
+    const granted = await browser.permissions
+      .contains({ origins: [pin.pattern] })
+      .catch(() => false);
+    if (granted) kept.push(pin);
+  }
+
+  const wanted = new Map(kept.map((pin) => [scriptId(pin.pattern), pin]));
+  const existing = await browser.scripting.getRegisteredContentScripts().catch(() => []);
+  const existingIds = new Set(existing.map((script) => script.id));
+
+  // Anything of ours Chrome is still running that no pin asks for. Scoped to
+  // our own id prefix so a stray registration from something else is left alone.
+  const stale = [...existingIds].filter((id) => id.startsWith('coast-') && !wanted.has(id));
+  if (stale.length > 0) {
+    await browser.scripting.unregisterContentScripts({ ids: stale }).catch(() => undefined);
+  }
+
+  for (const [id, pin] of wanted) {
+    if (existingIds.has(id)) continue;
+    await register(pin.pattern).catch(() => undefined);
+  }
+
+  if (kept.length !== pins.length) await writePins(kept);
+}
+
+/**
+ * Watch for access being revoked from the browser's own UI.
+ *
+ * Registered synchronously, in the worker's first turn, because Chrome delivers
+ * the event that woke a worker only to listeners that were already there.
+ */
+export function watchRevokedPermissions(): void {
+  browser.permissions.onRemoved.addListener(() => {
+    void reconcilePins();
+  });
+}

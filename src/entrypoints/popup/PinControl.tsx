@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { pinCandidates, type PinCandidate } from '@/pins/patterns';
 import { pinFor, pinSite, type Pin } from '@/pins/pins';
-import { injectPanel } from '@/lib/inject';
 
 /**
  * Pinning, from the popup.
@@ -11,7 +10,7 @@ import { injectPanel } from '@/lib/inject';
  * then the exact site is chosen by default — widening is a deliberate act, and
  * Chrome's own dialog is what finally names what is being granted.
  */
-export default function PinControl({ url, tabId }: { url: string; tabId: number }) {
+export default function PinControl({ url }: { url: string }) {
   const [candidates, setCandidates] = useState<PinCandidate[]>([]);
   const [chosen, setChosen] = useState(0);
   const [pinned, setPinned] = useState<Pin | null>(null);
@@ -36,9 +35,10 @@ export default function PinControl({ url, tabId }: { url: string; tabId: number 
       setDeclined(true);
       return;
     }
-    // The registration only covers the next load, and the reader is looking at
-    // this one.
-    await injectPanel(tabId);
+    // Nothing here makes the panel appear. The worker watches for a pin being
+    // written and shows the panel on every open tab the pin covers — including
+    // this one — because a reader who pins and immediately looks back at the
+    // page closes this popup, and any work still in flight closes with it.
     setPinned(await pinFor(url));
   }
 

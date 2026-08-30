@@ -93,10 +93,53 @@ input[type="range"]:disabled { opacity: 0.4; cursor: default; }
   color: rgba(255, 255, 255, 0.76);
 }
 .readout.off { color: rgba(255, 255, 255, 0.42); }
+
+.more {
+  flex: none;
+  width: 22px; height: 22px;
+  padding: 0; border: 0; border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.55);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.more:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
+
+/* Unpin sits behind a menu rather than beside the play button on purpose:
+   undoing a mis-click costs a permission dialog, which is more than a stray
+   press should ever cost. */
+.menu {
+  position: absolute;
+  right: 8px;
+  bottom: calc(100% + 8px);
+  min-width: 168px;
+  padding: 4px;
+  border-radius: 10px;
+  background: rgba(28, 25, 22, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+}
+.menu[hidden] { display: none; }
+.menu button {
+  border: 0; background: transparent;
+  padding: 8px 10px;
+  border-radius: 6px;
+  text-align: left;
+  font: inherit;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.86);
+  cursor: pointer;
+}
+.menu button:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
 `;
 
 export type PanelHandlers = {
   onToggle: () => void;
+  /** Remove the pin for the site the panel is standing on. */
+  onUnpin: () => void;
+  onSettings: () => void;
   /** Fires continuously while the thumb moves. */
   onSpeed: (speed: number) => void;
   /** Fires once, when the thumb is let go. The one that writes to storage. */
@@ -129,12 +172,25 @@ export function createPanel(handlers: PanelHandlers): Panel {
     </button>
     <input type="range" min="0" max="${SLIDER_STEPS}" step="1" aria-label="Scroll speed">
     <span class="readout"></span>
+    <button class="more" type="button" aria-label="More" aria-expanded="false">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
+        <circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/>
+      </svg>
+    </button>
+    <div class="menu" hidden>
+      <button type="button" data-action="unpin">Unpin from this site</button>
+      <button type="button" data-action="settings">Settings</button>
+    </div>
   `;
 
   const toggle = panel.querySelector('.toggle') as HTMLButtonElement;
   const glyph = panel.querySelector('.toggle svg') as SVGElement;
   const slider = panel.querySelector('input') as HTMLInputElement;
   const readout = panel.querySelector('.readout') as HTMLSpanElement;
+  const more = panel.querySelector('.more') as HTMLButtonElement;
+  const menu = panel.querySelector('.menu') as HTMLDivElement;
+  const unpin = panel.querySelector('[data-action="unpin"]') as HTMLButtonElement;
+  const settings = panel.querySelector('[data-action="settings"]') as HTMLButtonElement;
 
   root.append(style, panel);
   document.body.appendChild(host);
@@ -154,6 +210,29 @@ export function createPanel(handlers: PanelHandlers): Panel {
   }
 
   toggle.addEventListener('click', () => handlers.onToggle());
+
+  function closeMenu() {
+    menu.hidden = true;
+    more.setAttribute('aria-expanded', 'false');
+  }
+
+  more.addEventListener('click', () => {
+    menu.hidden = !menu.hidden;
+    more.setAttribute('aria-expanded', String(!menu.hidden));
+  });
+  unpin.addEventListener('click', () => {
+    closeMenu();
+    handlers.onUnpin();
+  });
+  settings.addEventListener('click', () => {
+    closeMenu();
+    handlers.onSettings();
+  });
+  // A click anywhere else closes it. The listener is on the document rather
+  // than the panel because that is where the clicks it cares about land.
+  document.addEventListener('pointerdown', (event) => {
+    if (!menu.hidden && !panel.contains(event.target as Node)) closeMenu();
+  });
 
   slider.addEventListener('pointerdown', () => {
     dragging = true;

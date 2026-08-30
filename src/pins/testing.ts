@@ -89,12 +89,13 @@ export function installFakeChrome(): FakeChrome {
     async revokeExternally(origin) {
       granted.delete(origin);
       for (const listener of removedListeners) listener({ origins: [origin] });
-      // Listeners are fired synchronously by Chrome but do their work in a
-      // promise; letting the microtask queue drain is what a caller would
-      // otherwise have to remember to do by hand.
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
+      // Chrome fires listeners synchronously, but the work they start is a
+      // chain of promises over storage. Letting the event loop turn a few times
+      // is what a caller would otherwise have to remember to do by hand, and it
+      // is why this helper is async at all.
+      for (let turn = 0; turn < 20; turn++) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
     },
     restore() {
       browser.permissions.request = originals.request;

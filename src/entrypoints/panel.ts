@@ -1,6 +1,8 @@
+import { browser } from 'wxt/browser';
 import { installController } from '@/scroll/controller';
 import { createPanel } from '@/panel/mount';
 import { saveSpeed } from '@/lib/settings';
+import { OPEN_OPTIONS, UNPIN } from '@/pins/protocol';
 
 /**
  * The control on a pinned site.
@@ -27,6 +29,24 @@ export default defineUnlistedScript(() => {
     },
     onSpeed: (speed) => controller.setSpeed(speed),
     onCommit: (speed) => void saveSpeed(speed),
+
+    // A content script can call neither `permissions` nor `scripting`, so this
+    // is a request rather than an action. The worker works out which pin covers
+    // this page; the panel only knows which page it is on.
+    onUnpin: () => {
+      void browser.runtime
+        .sendMessage({ type: UNPIN, url: location.href })
+        .then((removed) => {
+          if (removed === true) {
+            controller.stop();
+            panel.destroy();
+          }
+        })
+        .catch(() => undefined);
+    },
+    onSettings: () => {
+      void browser.runtime.sendMessage({ type: OPEN_OPTIONS }).catch(() => undefined);
+    },
   });
 
   controller.subscribe((status) => panel.render(status));

@@ -2,7 +2,15 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { fakeBrowser } from 'wxt/testing/fake-browser';
 import { installFakeChrome, type FakeChrome } from './testing';
 import { pinCandidates } from './patterns';
-import { pinFor, pinSite, readPins, unpinSite } from './pins';
+import { browser } from 'wxt/browser';
+import {
+  pinFor,
+  pinSite,
+  readPins,
+  reconcilePins,
+  unpinSite,
+  watchRevokedPermissions,
+} from './pins';
 
 const GUITAR = 'https://tabs.ultimate-guitar.com/tab/a/b-1';
 const [THIS_SITE, WHOLE_DOMAIN] = pinCandidates(GUITAR);
@@ -109,5 +117,56 @@ describe('which pin covers a page', () => {
   it('covers a subdomain when the whole domain was pinned', async () => {
     await pinSite(WHOLE_DOMAIN!);
     expect((await pinFor('https://www.ultimate-guitar.com/x'))?.subdomains).toBe(true);
+  });
+});
+
+describe('keeping the browser and the extension agreeing', () => {
+  it('drops a pin whose access the reader revoked in the browser', async () => {
+    await pinSite(THIS_SITE!);
+    chrome.granted.delete(THIS_SITE!.pattern);
+
+    await reconcilePins();
+
+    expect(await readPins()).toEqual([]);
+    expect(chrome.registered.size).toBe(0);
+  });
+
+  it('puts back a registration that went missing', async () => {
+    // Registrations persist across restarts on their own, but a browser that
+    // lost one would leave a pinned site quietly without its panel.
+    await pinSite(THIS_SITE!);
+    chrome.registered.clear();
+
+    await reconcilePins();
+
+    expect(chrome.registered.size).toBe(1);
+  });
+
+  it('clears a registration that no pin asks for', async () => {
+    await pinSite(THIS_SITE!);
+    await browser.scripting.registerContentScripts([
+      { id: 'coast-stray', js: ['panel.js'], matches: ['*://stray.example/*'] },
+    ]);
+
+    await reconcilePins();
+
+    expect([...chrome.registered.keys()]).not.toContain('coast-stray');
+  });
+
+  it('leaves a healthy pin exactly as it was', async () => {
+    await pinSite(THIS_SITE!);
+    await reconcilePins();
+
+    expect(await readPins()).toHaveLength(1);
+    expect(chrome.registered.size).toBe(1);
+  });
+
+  it('notices a revocation as it happens, without waiting for a restart', async () => {
+    await pinSite(THIS_SITE!);
+    watchRevokedPermissions();
+
+    await chrome.revokeExternally(THIS_SITE!.pattern);
+
+    expect(await readPins()).toEqual([]);
   });
 });
