@@ -70,11 +70,15 @@ function build(): ScrollController {
   // has replied.
   void readSettings().then((settings) => {
     engine.setSpeed(settings.speed);
+    engine.setManualScroll(settings.manualScroll);
     announce();
   });
 
+  // A page stays open across a change made on the settings page, so the answer
+  // read above has to keep being re-read.
   watchSettings((settings) => {
     engine.setSpeed(settings.speed);
+    engine.setManualScroll(settings.manualScroll);
     announce();
   });
 

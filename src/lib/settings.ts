@@ -1,6 +1,7 @@
 import { browser } from 'wxt/browser';
 import { clampSpeed, DEFAULT_SPEED_PX_PER_S } from '@/scroll/speed';
 import { DEFAULT_POSITION, type Position } from '@/panel/position';
+import type { ManualScroll } from '@/scroll/step';
 
 /**
  * Everything Coast remembers, and the only module that touches
@@ -23,11 +24,16 @@ export type Settings = {
    * why it is one position rather than one per site.
    */
   panelPosition: Position;
+  /** What a manual scroll does: pause and carry on, or end the crawl. */
+  manualScroll: ManualScroll;
 };
 
 const DEFAULTS: Settings = {
   speed: DEFAULT_SPEED_PX_PER_S,
   panelPosition: DEFAULT_POSITION,
+  // Pausing, because with `stop` a nudge of the scrollbar costs a trip back to
+  // the popup — a punishment for having touched the page you are reading.
+  manualScroll: 'pause',
 };
 
 function toPosition(stored: unknown): Position {
@@ -41,10 +47,14 @@ function toPosition(stored: unknown): Position {
 }
 
 function toSettings(stored: unknown): Settings {
-  const value = stored as { speed?: unknown; panelPosition?: unknown } | null | undefined;
+  const value = stored as
+    | { speed?: unknown; panelPosition?: unknown; manualScroll?: unknown }
+    | null
+    | undefined;
   return {
     speed: typeof value?.speed === 'number' ? clampSpeed(value.speed) : DEFAULTS.speed,
     panelPosition: toPosition(value?.panelPosition),
+    manualScroll: value?.manualScroll === 'stop' ? 'stop' : DEFAULTS.manualScroll,
   };
 }
 
@@ -70,6 +80,11 @@ export async function saveSpeed(speed: number): Promise<void> {
 export async function savePanelPosition(panelPosition: Position): Promise<void> {
   const settings = await readSettings();
   await browser.storage.local.set({ [KEY]: { ...settings, panelPosition } });
+}
+
+export async function saveManualScroll(manualScroll: ManualScroll): Promise<void> {
+  const settings = await readSettings();
+  await browser.storage.local.set({ [KEY]: { ...settings, manualScroll } });
 }
 
 /** Calls `cb` whenever settings change, and returns the unsubscribe. */

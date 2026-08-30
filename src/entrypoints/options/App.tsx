@@ -2,7 +2,8 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { browser } from 'wxt/browser';
 import { changePin, readPins, unpinSite, type Pin } from '@/pins/pins';
 import { DEFAULT_POSITION } from '@/panel/position';
-import { readSettings, savePanelPosition, saveSpeed } from '@/lib/settings';
+import { readSettings, saveManualScroll, savePanelPosition, saveSpeed } from '@/lib/settings';
+import type { ManualScroll } from '@/scroll/step';
 import {
   DEFAULT_SPEED_PX_PER_S,
   formatSpeed,
@@ -95,6 +96,7 @@ export default function App() {
   const [pins, setPins] = useState<Pin[] | null>(null);
   const [speed, setSpeed] = useState(DEFAULT_SPEED_PX_PER_S);
   const [shortcut, setShortcut] = useState<string | null>(null);
+  const [manualScroll, setManualScroll] = useState<ManualScroll>('pause');
 
   function refresh() {
     void readPins().then(setPins);
@@ -102,7 +104,10 @@ export default function App() {
 
   useEffect(() => {
     refresh();
-    void readSettings().then((settings) => setSpeed(settings.speed));
+    void readSettings().then((settings) => {
+      setSpeed(settings.speed);
+      setManualScroll(settings.manualScroll);
+    });
     void browser.commands?.getAll().then((commands) => {
       const toggle = commands.find((command) => command.name === 'toggle-scroll');
       setShortcut(toggle?.shortcut === undefined || toggle.shortcut === '' ? null : toggle.shortcut);
@@ -159,6 +164,38 @@ export default function App() {
           >
             {formatSpeed(speed)}
           </span>
+        </div>
+      </Section>
+
+      <Section
+        title="When I scroll manually"
+        blurb="Coast notices the page moving, however you moved it — the wheel, the scrollbar, a link to a section further down."
+      >
+        <div className="space-y-2">
+          {(
+            [
+              ['pause', 'Pause, then carry on', 'It waits until you stop, then continues from where you left it.'],
+              ['stop', 'Stop scrolling', 'The crawl ends, and you press play again when you want it back.'],
+            ] as const
+          ).map(([value, label, blurb]) => (
+            <label key={value} className="flex cursor-pointer gap-3">
+              <input
+                type="radio"
+                name="manual-scroll"
+                data-testid={`manual-${value}`}
+                checked={manualScroll === value}
+                onChange={() => {
+                  setManualScroll(value);
+                  void saveManualScroll(value);
+                }}
+                className="mt-0.5 accent-amber-500"
+              />
+              <span>
+                <span className="block text-sm font-medium">{label}</span>
+                <span className="block text-sm text-neutral-500 dark:text-neutral-400">{blurb}</span>
+              </span>
+            </label>
+          ))}
         </div>
       </Section>
 

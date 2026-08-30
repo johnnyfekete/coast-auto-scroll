@@ -69,6 +69,16 @@ export type ScrollState = {
   stalledSince: number | null;
 };
 
+/**
+ * What a manual scroll means.
+ *
+ * A statement about how the reader reads, rather than about a site — which is
+ * why it is one setting rather than one per pinned site. `pause` never punishes
+ * a nudge of the scrollbar; `stop` suits a reader who would rather take the
+ * page back entirely.
+ */
+export type ManualScroll = 'pause' | 'stop';
+
 export type ScrollInput = {
   now: number;
   /** Milliseconds since the previous step. */
@@ -79,6 +89,8 @@ export type ScrollInput = {
   max: number;
   /** Pixels per second. */
   speed: number;
+  /** What to do when something else moves the page. Defaults to pausing. */
+  mode?: ManualScroll;
 };
 
 export type ScrollStep = {
@@ -113,7 +125,9 @@ export function step(state: ScrollState, input: ScrollInput): ScrollStep {
         stalledSince: null,
       },
       scrollTo: null,
-      finished: false,
+      // `finished` carries both endings, because to everything downstream they
+      // are the same event: the crawl is over and the control says so.
+      finished: input.mode === 'stop',
     };
   }
 

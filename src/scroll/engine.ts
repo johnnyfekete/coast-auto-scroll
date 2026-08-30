@@ -1,5 +1,5 @@
 import { browser } from 'wxt/browser';
-import { initialState, step, type ScrollState } from './step';
+import { initialState, step, type ManualScroll, type ScrollState } from './step';
 import { resolveScroller, type Scroller } from './scroller';
 import { clampSpeed } from './speed';
 
@@ -19,11 +19,13 @@ export type Engine = {
   scrollable: () => boolean;
   speed: () => number;
   setSpeed: (speed: number) => void;
+  setManualScroll: (mode: ManualScroll) => void;
 };
 
 /** `onStop` fires only for a stop the engine decided on by itself. */
 export function createEngine(initialSpeed: number, onStop: () => void): Engine {
   let speed = clampSpeed(initialSpeed);
+  let mode: ManualScroll = 'pause';
   let scroller: Scroller | null = null;
   let state: ScrollState | null = null;
   let previous = 0;
@@ -68,6 +70,7 @@ export function createEngine(initialSpeed: number, onStop: () => void): Engine {
       actual: scroller.position(),
       max: scroller.max(),
       speed,
+      mode,
     });
     previous = now;
     state = result.state;
@@ -103,6 +106,9 @@ export function createEngine(initialSpeed: number, onStop: () => void): Engine {
     speed: () => speed,
     setSpeed(next) {
       speed = clampSpeed(next);
+    },
+    setManualScroll(next) {
+      mode = next;
     },
   };
 }

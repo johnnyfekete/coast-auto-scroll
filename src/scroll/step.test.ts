@@ -168,3 +168,40 @@ describe('the end of the page', () => {
     expect(middle.finished).toBe(false);
   });
 });
+
+describe('when the reader would rather it just stopped', () => {
+  const STOP = { ...PAGE, mode: 'stop' as const };
+
+  it('ends the crawl instead of pausing it', () => {
+    const scrolled = step(initialState(500, 0), { now: 1000, elapsed: 16, actual: 900, ...STOP });
+    expect(scrolled.finished).toBe(true);
+    expect(scrolled.scrollTo).toBeNull();
+  });
+
+  it('still ignores movement inside the tolerance', () => {
+    // The page's own rounding is not a reader, in either mode.
+    const drifted = step(initialState(500, 0), {
+      now: 1000,
+      elapsed: 100,
+      actual: 500 + DRIFT_TOLERANCE_PX - 0.5,
+      ...STOP,
+    });
+    expect(drifted.finished).toBe(false);
+  });
+
+  it('leaves the pausing behaviour alone when that is what was chosen', () => {
+    const scrolled = step(initialState(500, 0), {
+      now: 1000,
+      elapsed: 16,
+      actual: 900,
+      ...PAGE,
+      mode: 'pause' as const,
+    });
+    expect(scrolled.finished).toBe(false);
+  });
+
+  it('treats a missing mode as pausing, which is the default everywhere else', () => {
+    const scrolled = step(initialState(500, 0), { now: 1000, elapsed: 16, actual: 900, ...PAGE });
+    expect(scrolled.finished).toBe(false);
+  });
+});
