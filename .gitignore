@@ -1,0 +1,12 @@
+node_modules/
+.output/
+.wxt/
+stats.html
+test-results/
+playwright-report/
+blob-report/
+.DS_Store
+*.log
+
+# Specs and issues live here, and stay local.
+.local/
